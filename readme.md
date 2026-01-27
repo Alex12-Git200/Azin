@@ -12,12 +12,6 @@ This repository focuses on the complete compilation pipeline, including lexical 
 - [Overview](#overview)
 - [Features](#features)
 - [Project Structure](#project-structure)
-- [Compilation Pipeline](#compilation-pipeline)
-- [Example](#example)
-- [Build and Run](#build-and-run)
-- [Design Goals](#design-goals)
-- [Current Limitations](#current-limitations)
-- [License](#license)
 
 ---
 
