@@ -1,3 +1,0 @@
-out@io("Hello World");
-return 42;
-
