@@ -51,6 +51,12 @@ out@io("Hello World");
 
 ---
 
+### VSCode extension 
+
+I have made a [VSCode extension](https://github.com/Alex12-Git200/Azin-Language-Support-VSCode) for syntax highlighting
+
+---
+
 ## How to run it
 
 This is only for linux.

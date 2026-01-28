@@ -34,6 +34,19 @@ std::vector<Token> Lexer::tokenize()
     {
         skipWhitespace();
 
+        if (peek() == '/' && peekNext() == '/')
+        {
+            // consume '//'
+            advance();
+            advance();
+
+            // skip until end of line or EOF
+            while (peek() != '\n' && peek() != '\0')
+                advance();
+
+            continue; // restart token loop
+        }
+
         char c = peek();
         if (c == '\0') 
         {

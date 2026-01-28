@@ -10,3 +10,5 @@ g++ -std=c++17 \
     -o azc
 
 echo "[OK] azc built"
+
+chmod +x build-compiler.sh
