@@ -1,1 +1,1 @@
-g++ main.cpp ast.cpp Parser.cpp Lexer.cpp asmgen.cpp -o main && ./main test.az  && nasm -f elf64 out.asm -o out.o && gcc -no-pie out.o -o out && rm out.o && rm out.asm 
+g++ main.cpp ast.cpp Parser.cpp Lexer.cpp asmgen.cpp -o main && ./main test.az  && nasm -f elf64 azc.asm -o azc.o && gcc -no-pie azc.o -o azc && rm azc.o && rm azc.asm && rm main
