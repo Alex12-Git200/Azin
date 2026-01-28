@@ -48,3 +48,27 @@ It can also print Hello World
 ```
 out@io("Hello World");
 ```
+
+---
+
+## How to run it
+
+This is only for linux.
+
+Debian/Ubuntu:
+```
+sudo apt install g++ nasm gcc
+```
+This install the dependencies.
+
+
+Run this from the project root to build the compiler (or download a precompiled binary from the Releases page):
+```
+./build.sh
+```
+
+To compile a .az file, run:
+```
+./out file.az
+```
+
