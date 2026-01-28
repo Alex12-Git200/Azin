@@ -1,2 +1,5 @@
-out@io("Hello World");
-return 123;
+x = 5;
+
+out@io("I have ");
+out@io(x);
+out@io(" Dollars");

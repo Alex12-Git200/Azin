@@ -23,7 +23,7 @@ Stmt* parse_statement(Parser& p)
 {
     Token t = peek(p);
 
-    // ----- return statement -----
+    // return
     if (t.type == TOK_RETURN)
     {
         advance(p); // consume 'return'
@@ -37,6 +37,55 @@ Stmt* parse_statement(Parser& p)
         Stmt* s = new Stmt;
         s->type = STMT_RETURN;
         s->value = value;
+        return s;
+    }
+    if (t.type == TOK_INT)
+    {
+        advance(p); // consume 'int'
+
+        if (peek(p).type != TOK_IDENT)
+            throw std::runtime_error("expected variable name after 'int'");
+
+        std::string name = advance(p).value;
+
+        if (peek(p).type != TOK_EQUAL)
+            throw std::runtime_error("expected '=' after variable name");
+
+        advance(p); // '='
+
+        Expr* value = parse_expression(p);
+
+        if (peek(p).type != TOK_SEMI)
+            throw std::runtime_error("expected ';' after declaration");
+
+        advance(p);
+
+        Stmt* s = new Stmt; 
+        s->type = STMT_DECL;
+        s->var_name = name;
+        s->value = value;
+        return s;
+    }
+    // variable assign
+    if (t.type == TOK_IDENT &&
+    p.pos + 1 < p.tokens->size() &&
+    (*p.tokens)[p.pos + 1].type == TOK_EQUAL)
+    {
+        std::string name = advance(p).value; // IDENT
+        advance(p); // '='
+
+        Expr* value = parse_expression(p);
+
+        if (peek(p).type != TOK_SEMI)
+            throw std::runtime_error("expected ';' after assignment");
+
+        advance(p);
+
+        // build AST node
+        Stmt* s = new Stmt;
+        s->type = STMT_ASSIGN;   // NEW
+        s->value = value;
+        s->var_name = name;      // NEW
         return s;
     }
 
@@ -82,36 +131,42 @@ Expr* parse_expression(Parser& p)
     if (t.type == TOK_IDENT)
     {
         advance(p);
-        std::string func = t.value;
+        std::string name = t.value;
 
-        if (peek(p).type != TOK_AT)
-            throw std::runtime_error("expected '@' after function name");
+        // function call?
+        if (peek(p).type == TOK_AT)
+        {
+            advance(p); // '@'
 
-        advance(p); 
+            if (peek(p).type != TOK_IDENT)
+                throw std::runtime_error("expected module name");
 
-        if (peek(p).type != TOK_IDENT)
-            throw std::runtime_error("expected module name after '@'");
+            std::string module = advance(p).value;
 
-        std::string module = advance(p).value;
+            if (peek(p).type != TOK_LPAREN)
+                throw std::runtime_error("expected '('");
 
-        if (peek(p).type != TOK_LPAREN)
-            throw std::runtime_error("expected '('");
+            advance(p);
 
-        advance(p); 
+            Expr* arg = parse_expression(p);
 
-        Expr* arg = parse_expression(p);
+            if (peek(p).type != TOK_RPAREN)
+                throw std::runtime_error("expected ')'");
 
-        if (peek(p).type != TOK_RPAREN)
-            throw std::runtime_error("expected ')'");
+            advance(p);
 
-        advance(p);
+            Expr* e = new Expr;
+            e->type = EXPR_CALL;
+            e->func_name = name;
+            e->module_name = module;
+            e->arg = arg;
+            return e;
+        }
 
-        // build AST node
+        // variable reference
         Expr* e = new Expr;
-        e->type = EXPR_CALL;
-        e->func_name = func;
-        e->module_name = module;
-        e->arg = arg;
+        e->type = EXPR_VAR;
+        e->var_name = name;
         return e;
     }
 

@@ -41,11 +41,23 @@ void print_stmt(Stmt* s)
         std::cout << "ReturnStmt\n";
         print_expr(s->value, 1);
         return;
-    }
+    } 
 
     if (s->type == STMT_EXPR)
     {
         std::cout << "ExprStmt\n";
+        print_expr(s->value, 1);
+        return;
+    }
+    if (s->type == STMT_ASSIGN)
+    {
+        std::cout << "AssignStmt " << s->var_name << "\n";
+        print_expr(s->value, 1);
+        return;
+    }
+    if (s->type == STMT_DECL)
+    {
+        std::cout << "DeclStmt " << s->var_name << "\n";
         print_expr(s->value, 1);
         return;
     }

@@ -83,6 +83,7 @@ std::vector<Token> Lexer::tokenize()
         else if (c == ')') {tokens.push_back({TOK_RPAREN, std::string(1, c)}); advance();}
         else if (c == '!') {tokens.push_back({TOK_BANG, std::string(1, c)}); advance();}
         else if (c == '@') {tokens.push_back({TOK_AT, std::string(1, c)}); advance();}
+        else if (c == '=') {tokens.push_back({TOK_EQUAL, std::string(1, c)}); advance();}
 
         else if (c == '"')
         {

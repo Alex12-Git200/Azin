@@ -28,8 +28,9 @@ enum TokenType
     TOK_LT,        // <
     TOK_GT,        // >
     TOK_AT,        // @
+    TOK_EQUAL,     // =
 
-    // Special
+    // Other
     TOK_EOF
 };
 
