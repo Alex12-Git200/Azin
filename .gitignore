@@ -5,3 +5,5 @@ build/
 bin/
 .vscode/
 *.log
+out.asm
+out

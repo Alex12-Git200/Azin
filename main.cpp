@@ -1,10 +1,10 @@
-#include "codegen.hpp"
+#include "asmgen.hpp"
 
 #include <iostream>   // cout, cerr
 #include <fstream>    // ifstream
 #include <sstream>    // stringstream
 #include <string>     // std::string
-#include <vector>     // later for tokens
+#include <vector>     // for tokens
 #include <cctype>     // isalpha, isdigit, isspace
 #include "Lexer.hpp"
 #include "Parser.hpp"
@@ -53,13 +53,8 @@ int main(int argc, char** argv)
         print_stmt(s);
     }
 
-    std::cout << "\nOutput:\n\n";
-
-    for (Stmt* s : program)
-    {
-        exec_stmt(s);
-    }
-
+    gen_program(program);
+    
     return 0;
     
 }

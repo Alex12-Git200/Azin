@@ -36,23 +36,15 @@ The compiler is implemented in modern C++ and follows a modular architecture, se
 
 ---
 
-## Project Structure
+## Syntax
 
-```text
-Azin/
-├── Lexer.cpp / Lexer.hpp
-│   └── Lexical analysis (tokenization)
-├── Parser.cpp / Parser.hpp
-│   └── Syntax parsing
-├── ast.cpp / ast.hpp
-│   └── Abstract Syntax Tree definitions
-├── codegen.cpp / codegen.hpp
-│   └── Code generation logic
-├── main.cpp
-│   └── Compiler entry point
-├── test.az
-│   └── Example Azin source file
-├── run.cmd
-│   └── Windows build/run helper
-└── README.md
+```
+int x = 5;
+out@io(x);
+```
+This prints the variable x, variable decleration is like C++, it has only int data type for now, and now int main().
+It can also print Hello World
+
+```
+out@io("Hello World");
 ```

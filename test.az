@@ -1,5 +1,2 @@
-x = 5;
-
-out@io("I have ");
+int x = 5;
 out@io(x);
-out@io(" Dollars");
