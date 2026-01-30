@@ -1,5 +1,4 @@
 !use <io>
 
 out@io("Hello World");
-
 return 0;

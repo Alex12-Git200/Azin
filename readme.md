@@ -37,12 +37,16 @@ The compiler is implemented in modern C++ and follows a modular architecture, se
 - int and bool variables
 - variable printing
 - basic errors on variables (e.g. bool x = 56; -> cant assign non-bool to bool)
+- has an io standard library
+- comments
 
 ---
 
 ## Syntax
 
 ```
+!use <io>
+
 int x = 5;
 out@io(x);
 ```
@@ -50,6 +54,8 @@ This prints the variable x, variable decleration is like C++, it has only int an
 It can also print strings
 
 ```
+!use <io>
+
 out@io("Hello World");
 ```
 
