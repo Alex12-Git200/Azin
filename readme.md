@@ -47,17 +47,22 @@ The compiler is implemented in modern C++ and follows a modular architecture, se
 ```
 !use <io>
 
-int x = 5;
-out@io(x);
+int main()
+{
+    int x = 5;
+    out@io(x);
+    return 0;
+}
 ```
-This prints the variable x, variable decleration is like C++, it has only int and bool data types for now, and no int main() yet.
-It can also print strings
+This prints the variable x, variable decleration is like C++.
 
 ```
 !use <io>
 
 out@io("Hello World");
 ```
+
+for more information, check out the docs
 
 ---
 
