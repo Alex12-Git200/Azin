@@ -6,8 +6,8 @@
 
 static std::ofstream out;
 
-static void gen_stmt(Stmt* s);
-static void gen_expr(Expr* e);
+static void gen_stmt(Stmt *s);
+static void gen_expr(Expr *e);
 
 static std::vector<std::string> body;
 
@@ -28,26 +28,25 @@ static int stack_offset = 0;
 static int string_id = 0;
 static std::vector<std::string> data_strings;
 
-static std::string emit_string(const std::string& s)
+static std::string emit_string(const std::string &s)
 {
     std::string label = "str_" + std::to_string(string_id++);
     data_strings.push_back(
-        label + " db \"" + s + "\", 10, 0"
-    );
+        label + " db \"" + s + "\", 10, 0");
     return label;
 }
 
-static void emit(const std::string& s)
+static void emit(const std::string &s)
 {
     out << s << "\n";
 }
 
-static void emit_body(const std::string& s)
+static void emit_body(const std::string &s)
 {
     body.push_back(s);
 }
 
-void gen_program(const std::vector<Stmt*>& program, const std::string& out_name)
+void gen_program(const std::vector<Stmt *> &program, const std::string &out_name)
 {
     data_strings.clear();
     string_id = 0;
@@ -60,9 +59,19 @@ void gen_program(const std::vector<Stmt*>& program, const std::string& out_name)
     vars.clear();
     stack_offset = 0;
 
-    for (Stmt* s : program)
+    for (Stmt *s : program)
     {
-        gen_stmt(s);
+        if (s->type != STMT_RETURN)
+            gen_stmt(s);
+    }
+
+    if (!program.empty() && program.back()->type == STMT_RETURN)
+    {
+        gen_expr(program.back()->value);
+    }
+    else
+    {
+        emit_body("    xor eax, eax");
     }
 
     int aligned = align16(stack_offset);
@@ -75,7 +84,7 @@ void gen_program(const std::vector<Stmt*>& program, const std::string& out_name)
     emit("fmt_int db \"%ld\", 10, 0");
     emit("fmt_str db \"%s\", 0");
 
-    for (auto& s : data_strings)
+    for (auto &s : data_strings)
         emit(s);
     emit("");
     emit("section .text");
@@ -86,20 +95,18 @@ void gen_program(const std::vector<Stmt*>& program, const std::string& out_name)
     if (aligned > 0)
         emit("    sub rsp, " + std::to_string(aligned));
 
-    for (auto& line : body)
+    for (auto &line : body)
         out << line << "\n";
 
     emit("    mov rsp, rbp");
     emit("    pop rbp");
-    emit("    xor eax, eax");
     emit("    ret");
     emit("section .note.GNU-stack noalloc noexec nowrite progbits");
 
     out.close();
 }
 
-
-static void gen_expr(Expr* e)
+static void gen_expr(Expr *e)
 {
     if (e->type == EXPR_INT)
     {
@@ -126,11 +133,9 @@ static void gen_expr(Expr* e)
     if (e->type == EXPR_BOOL)
     {
         emit_body(
-            "    mov rax, " + std::to_string(e->bool_value ? 1 : 0)
-        );
+            "    mov rax, " + std::to_string(e->bool_value ? 1 : 0));
         return;
     }
-
 
     if (e->type == EXPR_CALL)
     {
@@ -170,14 +175,22 @@ static void gen_expr(Expr* e)
     throw std::runtime_error("unsupported expression");
 }
 
-
-static void gen_stmt(Stmt* s)
+static void gen_stmt(Stmt *s)
 {
+    if (s->type == STMT_USE)
+    {
+        return; // do nothing
+    }
+
+    if (s->type == STMT_RETURN)
+    {
+        return; // handled in gen_program
+    }
+
     if (s->type == STMT_DECL)
     {
         stack_offset += 8;
-        vars[s->var_name] = { stack_offset, s->var_type };
-
+        vars[s->var_name] = {stack_offset, s->var_type};
 
         gen_expr(s->value);
         if (s->var_type == TYPE_BOOL)
@@ -210,4 +223,3 @@ static void gen_stmt(Stmt* s)
         return;
     }
 }
-

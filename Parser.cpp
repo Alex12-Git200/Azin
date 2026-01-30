@@ -1,9 +1,11 @@
 #include "parser.hpp"
 #include <stdexcept>
 #include <unordered_map>
+#include <unordered_set>
 
 
 static std::unordered_map<std::string, VarType> symbol_table;
+static std::unordered_set<std::string> imported_modules;
 
 Parser make_parser(const std::vector<Token>& tokens)
 {
@@ -26,7 +28,7 @@ static Token advance(Parser& p)
 Stmt* parse_statement(Parser& p)
 {
     Token t = peek(p);
-
+    
     // return
     if (t.type == TOK_RETURN)
     {
@@ -139,11 +141,47 @@ Stmt* parse_statement(Parser& p)
 
         // build AST node
         Stmt* s = new Stmt;
-        s->type = STMT_ASSIGN;   // NEW
+        s->type = STMT_ASSIGN;   
         s->value = value;
-        s->var_name = name;      // NEW
+        s->var_name = name;      
         return s;
     }
+    if (t.type == TOK_BANG)
+    {
+        advance(p); // '!'
+
+        if (peek(p).type != TOK_IDENT || peek(p).value != "use")
+            throw std::runtime_error("expected 'use' after '!'");
+
+        advance(p); // 'use'
+
+        if (peek(p).type != TOK_LT)
+            throw std::runtime_error("expected '<' after !use");
+        advance(p);
+
+        if (peek(p).type != TOK_IDENT)
+            throw std::runtime_error("expected module name");
+
+        std::string module = advance(p).value;
+
+        if (peek(p).type != TOK_GT)
+            throw std::runtime_error("expected '>'");
+        advance(p);
+
+        if (imported_modules.find(module) != imported_modules.end())
+            throw std::runtime_error(
+                "module '" + module + "' already imported"
+            );
+
+        imported_modules.insert(module);
+
+        Stmt* s = new Stmt;
+        s->type = STMT_USE;
+        s->module_name = module;
+        return s;
+    }
+
+
 
     Expr* e = parse_expression(p);
 
@@ -208,6 +246,11 @@ Expr* parse_expression(Parser& p)
 
             std::string module = advance(p).value;
 
+            if (imported_modules.find(module) == imported_modules.end())
+                throw std::runtime_error(
+                    "module '" + module + "' not imported"
+                );
+
             if (peek(p).type != TOK_LPAREN)
                 throw std::runtime_error("expected '('");
 
@@ -227,7 +270,6 @@ Expr* parse_expression(Parser& p)
             e->arg = arg;
             return e;
         }
-
         // variable reference
         Expr* e = new Expr;
         e->type = EXPR_VAR;
@@ -242,6 +284,7 @@ std::vector<Stmt*> parse_program(Parser& p)
 {
     std::vector<Stmt*> stmts;
     symbol_table.clear();
+    imported_modules.clear();
 
     while (true)
     {

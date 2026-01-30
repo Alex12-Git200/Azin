@@ -33,7 +33,9 @@ enum StmtType
     STMT_RETURN,
     STMT_EXPR,
     STMT_ASSIGN, 
-    STMT_DECL
+    STMT_DECL,
+    STMT_USE
+
 };
 
 enum VarType 
@@ -50,6 +52,8 @@ struct Stmt
     // variable
     std::string var_name;
     VarType var_type;
+
+    std::string module_name;
 };
 
 void print_stmt(Stmt* s);

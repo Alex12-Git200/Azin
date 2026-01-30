@@ -1,2 +1,5 @@
+!use <io>
 
-out@io(x);
+out@io("Hello World");
+
+return 0;

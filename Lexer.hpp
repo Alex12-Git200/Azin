@@ -27,7 +27,7 @@ enum TokenType
     TOK_SEMI,      // ;
     TOK_COMMA,     // ,
     TOK_BANG,      // !
-    TOK_LT,        // <
+    TOK_LT,        // < 
     TOK_GT,        // >
     TOK_AT,        // @
     TOK_EQUAL,     // =

@@ -1,5 +1,6 @@
 #include "lexer.hpp"
 #include <cctype>
+#include <iostream>
 
 Lexer::Lexer(const std::string& src)
     : source(src), pos(0) {}
@@ -106,10 +107,14 @@ std::vector<Token> Lexer::tokenize()
         else if (c == ';') {tokens.push_back({TOK_SEMI, std::string(1, c)}); advance();}
         else if (c == '(') {tokens.push_back({TOK_LPAREN, std::string(1, c)}); advance();}
         else if (c == ')') {tokens.push_back({TOK_RPAREN, std::string(1, c)}); advance();}
+        else if (c == '{') {tokens.push_back({TOK_LBRACE, std::string(1, c)}); advance();}
+        else if (c == '}') {tokens.push_back({TOK_RBRACE, std::string(1, c)}); advance();}
+        else if (c == ',') {tokens.push_back({TOK_COMMA, std::string(1, c)}); advance();}
         else if (c == '!') {tokens.push_back({TOK_BANG, std::string(1, c)}); advance();}
+        else if (c == '<') {tokens.push_back({TOK_LT, std::string(1, c)}); advance();}
+        else if (c == '>') {tokens.push_back({TOK_GT, std::string(1, c)}); advance();}
         else if (c == '@') {tokens.push_back({TOK_AT, std::string(1, c)}); advance();}
         else if (c == '=') {tokens.push_back({TOK_EQUAL, std::string(1, c)}); advance();}
-
         else if (c == '"')
         {
             std::vector<char> slt;  // stands for str_lit_tmp 
@@ -118,9 +123,15 @@ std::vector<Token> Lexer::tokenize()
             {
                 slt.push_back(advance());
             }
+        
             advance();
             std::string slt_final(slt.begin(), slt.end());
             tokens.push_back({TOK_STRING_LIT, slt_final});
+        }
+        else
+        {
+            std::cout << "Unknown Charachter: " << c << std::endl;
+            exit(1);
         }
          
 
