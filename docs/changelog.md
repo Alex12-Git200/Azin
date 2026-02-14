@@ -37,9 +37,11 @@ int main()
 }
 ```
 
+> This returns 5, which you can check by echo %ERRORLEVEL% on windows and echo $? on linux
+
 ## v0.1.1-alpha
 
-### New features
+### New feutures
 
 - comments
 - bool variables
