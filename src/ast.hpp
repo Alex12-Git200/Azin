@@ -3,9 +3,43 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <ostream>
+#include <variant>
 
 namespace azin
 {
+    struct Type
+    {
+        std::string base;   // "int", "char", etc
+        bool isPointer = false;
+        bool isArray = false;
+
+        bool operator==(const Type& other) const
+        {
+            return base == other.base &&
+                isPointer == other.isPointer &&
+                isArray == other.isArray;
+        }
+
+        bool operator!=(const Type& other) const
+        {
+            return !(*this == other);
+        }
+    };
+
+    inline std::ostream& operator<<(std::ostream& os, const Type& t)
+    {
+        os << t.base;
+
+        if (t.isPointer)
+            os << "*";
+
+        if (t.isArray)
+            os << "[]";
+
+        return os;
+    }
+
 
     struct Expr
     {
@@ -45,30 +79,26 @@ namespace azin
     // PARAM
     struct Param
     {
-        std::string type;
+        Type type;
         std::string name;
+
+        Param(const Type& type, const std::string& name)
+            : type(type), name(name) {}
     };
 
-    // ===== FUNCTION =====
+    // FUNCTION 
 
     struct FunctionDecl
     {
-        std::string returnType;
+        Type returnType;
         std::string name;
         std::vector<Param> params;
         std::unique_ptr<BlockStmt> body;
+        bool isExtern = false;
     };
 
-    // ===== PROGRAM ROOT =====
 
-    struct Program
-    {
-        std::vector<FunctionDecl> functions;
-    };
-
-    
-
-    // ===== Binary Expressions =====
+    // Binary Expressions 
     struct BinaryExpr : Expr
     {
         std::unique_ptr<Expr> left;
@@ -83,27 +113,40 @@ namespace azin
 
     struct VarDeclStmt : Stmt
     {
-        std::string type;
+        Type type;
         std::string name;
         std::unique_ptr<Expr> initializer;
 
-        VarDeclStmt(const std::string& type,
+        bool isArray = false;
+        int arraySize = -1;
+
+        VarDeclStmt(const Type& type,
                     const std::string& name,
-                    std::unique_ptr<Expr> initializer)
+                    std::unique_ptr<Expr> initializer,
+                    bool isArray = false,
+                    int arraySize = -1)
             : type(type),
             name(name),
-            initializer(std::move(initializer)) {}
+            initializer(std::move(initializer)),
+            isArray(isArray),
+            arraySize(arraySize) {}
+
+
     };
 
     struct AssignmentStmt : Stmt
     {
-        std::string name;
+        std::unique_ptr<Expr> target;
         std::unique_ptr<Expr> value;
 
-        AssignmentStmt(const std::string& name,
+        AssignmentStmt(std::unique_ptr<Expr> target,
                     std::unique_ptr<Expr> value)
-            : name(name), value(std::move(value)) {}
+            : target(std::move(target)),
+            value(std::move(value)) {}
     };
+
+
+
 
     struct IfStmt : Stmt
     {
@@ -118,6 +161,8 @@ namespace azin
             thenBranch(std::move(thenBranch)),
             elseBranch(std::move(elseBranch)) {}
     };
+
+    
 
     struct VarExpr : Expr
     {
@@ -149,6 +194,34 @@ namespace azin
             : expression(std::move(expr)) {}
     };
 
+    struct StringExpr : Expr
+    {
+        std::string value;
 
+        explicit StringExpr(const std::string& value)
+            : value(value) {}
+    };
+    struct IndexExpr : Expr
+    {
+        std::unique_ptr<Expr> base;
+        std::unique_ptr<Expr> index;
+
+        IndexExpr(std::unique_ptr<Expr> base,
+                std::unique_ptr<Expr> index)
+            : base(std::move(base)),
+            index(std::move(index)) {}
+    };
+
+    struct UseDecl
+    {
+        std::string path;
+    };
+
+    using TopLevelDecl = std::variant<FunctionDecl, UseDecl>;
+
+    struct Program
+    {
+        std::vector<TopLevelDecl> decls;
+    };
 
 }

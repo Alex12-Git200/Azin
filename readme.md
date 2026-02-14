@@ -49,4 +49,4 @@ Built to explore compiler architecture and language design from scratch.
 
 ## Documentation
 
-Full documentation and change logs are available in /docs.
+Full documentation and change logs are available in docs/.

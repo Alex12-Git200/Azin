@@ -25,6 +25,8 @@ namespace azin
                 case ')': tokens.push_back(makeToken(TokenType::RPAREN)); break;
                 case '{': tokens.push_back(makeToken(TokenType::LBRACE)); break;
                 case '}': tokens.push_back(makeToken(TokenType::RBRACE)); break;
+                case '[': tokens.push_back(makeToken(TokenType::LBRACKET)); break;
+                case ']': tokens.push_back(makeToken(TokenType::RBRACKET)); break;
                 case ';': tokens.push_back(makeToken(TokenType::SEMICOLON)); break;
                 case ',': tokens.push_back(makeToken(TokenType::COMMA)); break;
                 case '+': tokens.push_back(makeToken(TokenType::PLUS)); break;
@@ -52,12 +54,36 @@ namespace azin
                     break;
                 }
                 case '!':
-                    if (match('=')) {
+                {
+                    if (match('='))
+                    {
                         tokens.push_back(makeToken(TokenType::NOTEQ, "!="));
-                    } else {
-                        tokens.push_back(makeToken(TokenType::UNKNOWN));
+                    }
+                    else
+                    {
+                        // Check for !use
+                        if (peek() == 'u')
+                        {
+                            std::string directive;
+                            while (isalpha(peek()))
+                                directive += advance();
+
+                            if (directive == "use")
+                            {
+                                tokens.push_back(makeToken(TokenType::USE_DIRECTIVE, "!use"));
+                            }
+                            else
+                            {
+                                tokens.push_back(makeToken(TokenType::UNKNOWN));
+                            }
+                        }
+                        else
+                        {
+                            tokens.push_back(makeToken(TokenType::UNKNOWN));
+                        }
                     }
                     break;
+                }
 
                 case '<':
                     if (match('=')) {
@@ -76,9 +102,20 @@ namespace azin
                     }
                     break;
 
+                    case '"':
+                        tokens.push_back(string());
+                        break;
+
+
 
                 case '&': tokens.push_back(makeToken(TokenType::AMPERSAND)); break;
                 case '|': tokens.push_back(makeToken(TokenType::PIPE)); break;
+
+
+                case '\'':
+                    tokens.push_back(charLiteral());
+                    break;
+
 
                 default:
                     if (std::isalpha(c) || c == '_') {
@@ -196,17 +233,19 @@ namespace azin
             {"else",   TokenType::ELSE},
             {"while",  TokenType::WHILE},
             {"for",    TokenType::FOR},
-            {"int",    TokenType::TYPE_INT},
+            {"extern", TokenType::EXTERN},
 
+            {"int",    TokenType::TYPE_INT},
             {"i8",  TokenType::TYPE_I8},
             {"i16", TokenType::TYPE_I16},
             {"i32", TokenType::TYPE_I32},
             {"i64", TokenType::TYPE_I64},
-
             {"u8",  TokenType::TYPE_U8},
             {"u16", TokenType::TYPE_U16},
             {"u32", TokenType::TYPE_U32},
             {"u64", TokenType::TYPE_U64},
+            {"char", TokenType::TYPE_CHAR},
+
             {"bool", TokenType::TYPE_BOOL},
             {"true", TokenType::TRUE},
             {"false", TokenType::FALSE},
@@ -221,6 +260,36 @@ namespace azin
         }
 
         return TokenType::IDENTIFIER;
+    }
+    Token Lexer::string()
+    {
+        std::size_t start = position;
+
+        while (!isAtEnd() && peek() != '"')
+        {
+            advance();
+        }
+
+        if (isAtEnd())
+            return makeToken(TokenType::UNKNOWN);
+
+        std::string text = source.substr(start, position - start);
+        advance(); // consume closing "
+
+        return Token{TokenType::STRING, text, line, column};
+    }
+
+    Token Lexer::charLiteral()
+    {
+        if (isAtEnd())
+            return makeToken(TokenType::UNKNOWN);
+
+        char value = advance(); // actual char
+
+        if (!match('\''))
+            return makeToken(TokenType::UNKNOWN);
+
+        return Token{TokenType::CHAR_LITERAL, std::string(1, value), line, column};
     }
 
 

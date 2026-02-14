@@ -18,50 +18,75 @@ Program Parser::parse()
 
     while (!isAtEnd())
     {
-        program.functions.push_back(parseTopLevel());
+        program.decls.push_back(std::move(parseTopLevel()));
     }
-
-    validateMain(program);
 
     return program;
 }
 
 // Top-Level Parsing
 
-FunctionDecl Parser::parseTopLevel()
+TopLevelDecl Parser::parseTopLevel()
 {
+    if (match(TokenType::USE_DIRECTIVE))
+        return parseUse();
+
     return parseFunction();
 }
 
-Token Parser::parseType()
+
+Type Parser::parseType()
 {
-    if (match(TokenType::TYPE_INT) ||
-        match(TokenType::TYPE_NORE) ||
-        match(TokenType::TYPE_I8) ||
-        match(TokenType::TYPE_I16) ||
-        match(TokenType::TYPE_I32) ||
-        match(TokenType::TYPE_I64) ||
-        match(TokenType::TYPE_U8) ||
-        match(TokenType::TYPE_U16) ||
-        match(TokenType::TYPE_U32) ||
-        match(TokenType::TYPE_U64) ||
-        match(TokenType::TYPE_BOOL))
-    {
-        return previous();
-    }
+    Type t;
 
+    if (match(TokenType::TYPE_INT))
+        t.base = "int";
+    else if (match(TokenType::TYPE_CHAR))
+        t.base = "char";
+    else if (match(TokenType::TYPE_BOOL))
+        t.base = "bool";
+    else if (match(TokenType::TYPE_NORE))
+        t.base = "nore";
+    else if (match(TokenType::TYPE_I8))
+    t.base = "i8";
+    else if (match(TokenType::TYPE_I16))
+        t.base = "i16";
+    else if (match(TokenType::TYPE_I32))
+        t.base = "i32";
+    else if (match(TokenType::TYPE_I64))
+        t.base = "i64";
+    else if (match(TokenType::TYPE_U8))
+        t.base = "u8";
+    else if (match(TokenType::TYPE_U16))
+        t.base = "u16";
+    else if (match(TokenType::TYPE_U32))
+        t.base = "u32";
+    else if (match(TokenType::TYPE_U64))
+        t.base = "u64";
 
-    throw error("Expected type");
+    else
+        throw error("Expected type");
+
+    // handle pointers
+    while (match(TokenType::STAR))
+        t.isPointer = true;
+
+    return t;
+}
+
+UseDecl Parser::parseUse()
+{
+    Token path = consume(TokenType::STRING, "Expected file path after !use");
+    // consume(TokenType::SEMICOLON, "Expected ';' after !use");
+
+    return UseDecl{ path.lexeme };
 }
 
 
-// Function Parsing
 
-FunctionDecl Parser::parseFunction()
+FunctionDecl Parser::parseExtern()
 {
-
-    Token returnType = parseType();
-    currentFunctionReturnType = returnType.lexeme;
+    Type returnType = parseType();
     Token name = consume(TokenType::IDENTIFIER, "Expected function name");
 
     consume(TokenType::LPAREN, "Expected '('");
@@ -71,20 +96,83 @@ FunctionDecl Parser::parseFunction()
     if (!check(TokenType::RPAREN))
     {
         do {
-            Token type = parseType();
+            Type type = parseType();
             Token name = consume(TokenType::IDENTIFIER, "Expected parameter name");
 
-            params.push_back({ type.lexeme, name.lexeme });
+            bool isArray = false;
+
+            if (match(TokenType::LBRACKET))
+            {
+                consume(TokenType::RBRACKET, "Expected ']'");
+                isArray = true;
+            }
+
+            if (isArray)
+                type.isPointer = true;
+
+            params.push_back({ type, name.lexeme });
+
 
         } while (match(TokenType::COMMA));
     }
+
+    consume(TokenType::RPAREN, "Expected ')'");
+    consume(TokenType::SEMICOLON, "Expected ';' after extern declaration");
+
+    FunctionDecl fn{
+        returnType,
+        name.lexeme,
+        std::move(params),
+        nullptr
+    };
+
+    fn.isExtern = true;
+    return fn;
+}
+
+
+// Function Parsing
+
+FunctionDecl Parser::parseFunction()
+{
+    if (match(TokenType::EXTERN))
+        return parseExtern();
+
+    Type returnType = parseType();
+    currentFunctionReturnType = returnType.base;
+
+    Token name = consume(TokenType::IDENTIFIER, "Expected function name");
+
+    
+    consume(TokenType::LPAREN, "Expected '('");
+    std::vector<Param> params;
+
+    if (!check(TokenType::RPAREN))
+    {
+        do {
+            Type type = parseType();
+            Token name = consume(TokenType::IDENTIFIER, "Expected parameter name");
+
+            bool isArray = false;
+
+            if (match(TokenType::LBRACKET))
+            {
+                consume(TokenType::RBRACKET, "Expected ']'");
+                type.isPointer = true;
+            }
+
+            params.push_back({ type, name.lexeme });
+
+        } while (match(TokenType::COMMA));
+    }
+
 
     consume(TokenType::RPAREN, "Expected ')'");
 
 
     auto body = parseBlock();
     return FunctionDecl{
-        returnType.lexeme,
+        returnType,
         name.lexeme,
         std::move(params),
         std::move(body)
@@ -131,19 +219,31 @@ std::unique_ptr<Stmt> Parser::parseStatement()
         check(TokenType::TYPE_U16) ||
         check(TokenType::TYPE_U32) ||
         check(TokenType::TYPE_U64) ||
-        check(TokenType::TYPE_BOOL))
+        check(TokenType::TYPE_BOOL) ||
+        check(TokenType::TYPE_CHAR))
     {
         return parseVarDecl();
     }
 
     if (check(TokenType::IDENTIFIER))
     {
-        if (peekNext().type == TokenType::EQUAL)
-            return parseAssignment();
+        auto expr = parseExpression();
 
-        if (peekNext().type == TokenType::LPAREN)
-            return parseExpressionStatement();
+        if (match(TokenType::EQUAL))
+        {
+            auto value = parseExpression();
+            consume(TokenType::SEMICOLON, "Expected ';'");
+
+            return std::make_unique<AssignmentStmt>(
+                std::move(expr),
+                std::move(value)
+            );
+        }
+
+        consume(TokenType::SEMICOLON, "Expected ';'");
+        return std::make_unique<ExpressionStmt>(std::move(expr));
     }
+
 
 
     throw error("Unknown statement");
@@ -160,26 +260,46 @@ std::unique_ptr<Stmt> Parser::parseExpressionStatement()
 
 std::unique_ptr<Stmt> Parser::parseVarDecl()
 {
-    Token typeToken = parseType();
+    Type typeToken = parseType();
     Token name = consume(TokenType::IDENTIFIER, "Expected variable name");
 
-    consume(TokenType::EQUAL, "Expected '=' in variable declaration");
+    bool isArray = false;
+    int arraySize = -1;
 
-    auto initializer = parseExpression();
+    if (match(TokenType::LBRACKET))
+    {
+        Token sizeToken = consume(TokenType::NUMBER, "Expected array size");
+        arraySize = std::stoi(sizeToken.lexeme);
+        consume(TokenType::RBRACKET, "Expected ']'");
+        isArray = true;
+    }
+
+    std::unique_ptr<Expr> initializer = nullptr;
+
+    if (!isArray)
+    {
+        consume(TokenType::EQUAL, "Expected '=' in variable declaration");
+        initializer = parseExpression();
+    }
 
     consume(TokenType::SEMICOLON, "Expected ';' after variable declaration");
 
     return std::make_unique<VarDeclStmt>(
-        typeToken.lexeme,
+        typeToken,
         name.lexeme,
-        std::move(initializer)
+        std::move(initializer),
+        isArray,
+        arraySize
     );
+
 }
 
 
 std::unique_ptr<Stmt> Parser::parseAssignment()
 {
     Token name = consume(TokenType::IDENTIFIER, "Expected variable name");
+
+    std::unique_ptr<Expr> target = std::make_unique<VarExpr>(name.lexeme);
 
     consume(TokenType::EQUAL, "Expected '=' in assignment");
 
@@ -188,10 +308,11 @@ std::unique_ptr<Stmt> Parser::parseAssignment()
     consume(TokenType::SEMICOLON, "Expected ';' after assignment");
 
     return std::make_unique<AssignmentStmt>(
-        name.lexeme,
+        std::move(target),
         std::move(value)
     );
 }
+
 
 
 std::unique_ptr<ReturnStmt> Parser::parseReturn()
@@ -348,6 +469,9 @@ std::unique_ptr<Expr> Parser::parsePrimary()
     {
         std::string name = previous().lexeme;
 
+        std::unique_ptr<Expr> expr = std::make_unique<VarExpr>(name);
+
+        // Function call
         if (match(TokenType::LPAREN))
         {
             std::vector<std::unique_ptr<Expr>> args;
@@ -360,19 +484,35 @@ std::unique_ptr<Expr> Parser::parsePrimary()
             }
 
             consume(TokenType::RPAREN, "Expected ')'");
-            return std::make_unique<CallExpr>(name, std::move(args));
+            expr = std::make_unique<CallExpr>(name, std::move(args));
         }
 
-        return std::make_unique<VarExpr>(name);
+        // Array indexing (can chain)
+        while (match(TokenType::LBRACKET))
+        {
+            auto index = parseExpression();
+            consume(TokenType::RBRACKET, "Expected ']'");
+            expr = std::make_unique<IndexExpr>(std::move(expr), std::move(index));
+        }
+
+        return expr;
     }
-
-
 
     if (match(TokenType::LPAREN))
     {
         auto expr = parseExpression();
         consume(TokenType::RPAREN, "Expected ')'");
         return expr;
+    }
+
+    if (match(TokenType::STRING))
+    {
+        return std::make_unique<StringExpr>(previous().lexeme);
+    }
+
+    if (match(TokenType::CHAR_LITERAL))
+    {
+        return std::make_unique<LiteralExpr>("'" + previous().lexeme + "'");
     }
 
 
@@ -385,14 +525,18 @@ void Parser::validateMain(const Program& program)
 {
     bool foundMain = false;
 
-    for (const auto& fn : program.functions)
+    for (const auto& decl : program.decls)
     {
-        if (fn.name == "main")
+        if (std::holds_alternative<FunctionDecl>(decl))
         {
-            if (fn.returnType != "int")
-                throw std::runtime_error("main must return int");
+            const auto& fn = std::get<FunctionDecl>(decl);
+            if (fn.name == "main")
+            {
+                if (fn.returnType.base != "int")
+                    throw std::runtime_error("main must return int");
 
-            foundMain = true;
+                foundMain = true;
+            }
         }
     }
 

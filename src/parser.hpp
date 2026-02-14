@@ -21,7 +21,7 @@ namespace azin
         std::size_t current = 0;
 
         // ===== Top Level =====
-        FunctionDecl parseTopLevel();
+        TopLevelDecl  parseTopLevel();
         FunctionDecl parseFunction();
         void validateMain(const Program& program);
 
@@ -33,7 +33,7 @@ namespace azin
         std::unique_ptr<Stmt> parseVarDecl();
         std::unique_ptr<Stmt> parseAssignment();
         std::unique_ptr<Stmt> parseExpressionStatement();
-        Token parseType();
+        Type parseType();
 
         // ===== Expressions =====
         std::unique_ptr<Expr> parseExpression();
@@ -42,9 +42,13 @@ namespace azin
         std::unique_ptr<Expr> parseFactor();
         std::unique_ptr<Expr> parseEquality();
         std::unique_ptr<Expr> parseComparison();
+        FunctionDecl parseExtern();
+
 
         // ====== Other =====
         std::string currentFunctionReturnType;
+        UseDecl parseUse();
+
         
 
 

@@ -42,12 +42,16 @@ static const char* tokenTypeToString(TokenType type)
     {
         case TokenType::IDENTIFIER: return "IDENTIFIER";
         case TokenType::NUMBER: return "NUMBER";
+        case TokenType::STRING: return "STRING";
+        case TokenType::CHAR_LITERAL: return "CHAR_LIT";
+
 
         case TokenType::RETURN: return "RETURN";
         case TokenType::IF: return "IF";
         case TokenType::ELSE: return "ELSE";
         case TokenType::WHILE: return "WHILE";
         case TokenType::FOR: return "FOR";
+        case TokenType::EXTERN: return "EXTERN";
 
         case TokenType::TYPE_INT: return "TYPE_INT";
         case TokenType::TYPE_NORE: return "TYPE_NORE";
@@ -55,14 +59,22 @@ static const char* tokenTypeToString(TokenType type)
         case TokenType::TYPE_U16: return "TYPE_U16";
         case TokenType::TYPE_U32: return "TYPE_U32";
         case TokenType::TYPE_U64: return "TYPE_U64";
+        case TokenType::TYPE_I8: return "TYPE_I8";
+        case TokenType::TYPE_I16: return "TYPE_I16";
+        case TokenType::TYPE_I32: return "TYPE_I32";
+        case TokenType::TYPE_I64: return "TYPE_I64";
         case TokenType::TYPE_BOOL: return "TYPE_BOOL";
+        case TokenType::TYPE_CHAR: return "TYPE_CHAR";
         case TokenType::TRUE: return "TRUE";
         case TokenType::FALSE: return "FALSE";
+        case TokenType::USE_DIRECTIVE: return "USE_DIRECTIVE";
 
         // TODO: Add the other types if i forget
 
         case TokenType::LPAREN: return "LPAREN";
         case TokenType::RPAREN: return "RPAREN";
+        case TokenType::LBRACKET: return "LBRACKET";
+        case TokenType::RBRACKET: return "RBRACKET";
         case TokenType::LBRACE: return "LBRACE";
         case TokenType::RBRACE: return "RBRACE";
         case TokenType::SEMICOLON: return "SEMICOLON";
@@ -129,10 +141,18 @@ static void dumpStmt(const Stmt* stmt, int depth)
         indent(depth + 1);
         std::cout << "Name: " << var->name << "\n";
 
-        indent(depth + 1);
-        std::cout << "Initializer:\n";
+        if (var->initializer)
+        {
+            indent(depth + 1);
+            std::cout << "Initializer:\n";
+            dumpExpr(var->initializer.get(), depth + 2);
+        }
+        else
+        {
+            indent(depth + 1);
+            std::cout << "No Initializer\n";
+        }
 
-        dumpExpr(var->initializer.get(), depth + 2);
     }
     else if (auto assign = dynamic_cast<const AssignmentStmt*>(stmt))
     {
@@ -140,13 +160,14 @@ static void dumpStmt(const Stmt* stmt, int depth)
         std::cout << "AssignmentStmt\n";
 
         indent(depth + 1);
-        std::cout << "Name: " << assign->name << "\n";
+        std::cout << "Target:\n";
+        dumpExpr(assign->target.get(), depth + 2);
 
         indent(depth + 1);
         std::cout << "Value:\n";
-
         dumpExpr(assign->value.get(), depth + 2);
     }
+
     else if (auto ret = dynamic_cast<const ReturnStmt*>(stmt))
     {
         indent(depth);
@@ -177,6 +198,14 @@ static void dumpStmt(const Stmt* stmt, int depth)
 
         return;
     }
+    else if (auto exprStmt = dynamic_cast<const ExpressionStmt*>(stmt))
+    {
+        indent(depth);
+        std::cout << "ExpressionStmt\n";
+
+        dumpExpr(exprStmt->expression.get(), depth + 1);
+    }
+
 
     else
     {
@@ -216,6 +245,26 @@ static void dumpExpr(const Expr* expr, int depth)
         for (const auto& arg : call->arguments)
             dumpExpr(arg.get(), depth + 2);
     }
+    else if (auto idx = dynamic_cast<const IndexExpr*>(expr))
+    {
+        indent(depth);
+        std::cout << "IndexExpr\n";
+
+        indent(depth + 1);
+        std::cout << "Base:\n";
+        dumpExpr(idx->base.get(), depth + 2);
+
+        indent(depth + 1);
+        std::cout << "Index:\n";
+        dumpExpr(idx->index.get(), depth + 2);
+    }
+    else if (auto str = dynamic_cast<const StringExpr*>(expr))
+    {
+        indent(depth);
+        std::cout << "StringExpr: \"" << str->value << "\"\n";
+    }
+
+
 
     else
     {
@@ -228,27 +277,48 @@ static void dumpAST(const Program& program)
 {
     std::cout << "\n===== AST DUMP BEGIN =====\n";
 
-    for (const auto& fn : program.functions)
+    for (const auto& decl : program.decls)
     {
-        std::cout << "FunctionDecl\n";
+        if (std::holds_alternative<FunctionDecl>(decl))
+        {
+            const auto& fn = std::get<FunctionDecl>(decl);
 
-        indent(1);
-        std::cout << "ReturnType: " << fn.returnType << "\n";
+            std::cout << "FunctionDecl\n";
 
-        indent(1);
-        std::cout << "Name: " << fn.name << "\n";
+            indent(1);
+            std::cout << "ReturnType: " << fn.returnType << "\n";
 
-        indent(1);
-        std::cout << "Body:\n";
+            indent(1);
+            std::cout << "Name: " << fn.name << "\n";
 
-        for (const auto& stmt : fn.body->statements)
-            dumpStmt(stmt.get(), 2);
+            indent(1);
+            std::cout << "Body:\n";
+
+            if (fn.body)
+            {
+                for (const auto& stmt : fn.body->statements)
+                    dumpStmt(stmt.get(), 2);
+            }
+            else
+            {
+                indent(1);
+                std::cout << "Extern Function (no body)\n";
+            }
+        }
+        else if (std::holds_alternative<UseDecl>(decl))
+        {
+            const auto& use = std::get<UseDecl>(decl);
+
+            std::cout << "UseDecl\n";
+
+            indent(1);
+            std::cout << "Path: " << use.path << "\n";
+        }
     }
 
     std::cout << "===== AST DUMP END =====\n\n";
 }
 
-// Main
 
 int main(int argc, char** argv)
 {
@@ -256,12 +326,9 @@ int main(int argc, char** argv)
     if (!debugFile)
         return 1;
 
-
-    // Save original buffers
     std::streambuf* coutBuf = std::cout.rdbuf();
     std::streambuf* cerrBuf = std::cerr.rdbuf();
 
-    // Redirect
     std::cout.rdbuf(debugFile.rdbuf());
     std::cerr.rdbuf(debugFile.rdbuf());
 
@@ -273,10 +340,18 @@ int main(int argc, char** argv)
             throw std::runtime_error("Usage: azc <file.az>");
 
         std::string sourcePath = argv[1];
-        std::string fileName = removeExtension(argv[1]);
-        std::string cFileName  = fileName + ".c";
-        std::string exeFileName = fileName + ".exe";
+        std::string baseName = removeExtension(sourcePath);
+        std::string cFileName = baseName + ".c";
 
+#ifdef _WIN32
+        std::string exeFileName = baseName + ".exe";
+#else
+        std::string exeFileName = baseName;
+#endif
+
+        // =========================
+        // READ MAIN FILE
+        // =========================
 
         std::cout << "Reading file: " << sourcePath << "\n";
 
@@ -285,8 +360,11 @@ int main(int argc, char** argv)
         std::cout << "File loaded successfully.\n";
         std::cout << "File size: " << source.size() << " bytes\n";
 
-        // ===== LEXER =====
-        std::cout << "\n--- Starting Lexical Analysis ---\n";
+        // =========================
+        // LEXER (MAIN)
+        // =========================
+
+        std::cout << "\n--- Starting Lexical Analysis (MAIN) ---\n";
 
         Lexer lexer(source);
         auto tokens = lexer.tokenize();
@@ -296,18 +374,91 @@ int main(int argc, char** argv)
 
         dumpTokens(tokens);
 
-        // ===== PARSER =====
-        std::cout << "\n--- Starting Parsing ---\n";
+        // =========================
+        // PARSER (MAIN)
+        // =========================
+
+        std::cout << "\n--- Starting Parsing (MAIN) ---\n";
 
         Parser parser(tokens);
         Program program = parser.parse();
 
         std::cout << "Parsing completed successfully.\n";
 
-        // ===== AST =====
+
+        // =========================
+        // MERGE !use MODULES INTO AST
+        // =========================
+
+        std::vector<TopLevelDecl> mergedDecls = std::move(program.decls);
+        std::vector<std::string> extraCFiles;
+
+        for (size_t i = 0; i < mergedDecls.size(); ++i)
+        {
+            if (std::holds_alternative<UseDecl>(mergedDecls[i]))
+            {
+                const auto& use = std::get<UseDecl>(mergedDecls[i]);
+
+                std::cout << "\n--- Processing !use: " << use.path << " ---\n";
+
+                std::string usedSource = readFile(use.path);
+                std::cout << "Loaded module: " << use.path << "\n";
+
+                // LEXER
+                Lexer l(usedSource);
+                auto usedTokens = l.tokenize();
+
+                std::cout << "Module tokens: " << usedTokens.size() << "\n";
+                dumpTokens(usedTokens);
+
+                // PARSER
+                Parser p(usedTokens);
+                Program usedProgram = p.parse();
+
+                std::cout << "Module parsed successfully.\n";
+                dumpAST(usedProgram);
+
+                // ===== GENERATE MODULE C FILE FIRST =====
+                std::string moduleBase = removeExtension(use.path);
+                std::string moduleC = moduleBase + ".c";
+
+                std::string moduleCCode = CodegenC::generate(usedProgram);
+
+                std::ofstream outC(moduleC);
+                outC << moduleCCode;
+                outC.close();
+
+                std::cout << "Generated module C file: " << moduleC << "\n";
+
+                std::string command = "gcc " + cFileName;
+
+                for (const auto& mod : extraCFiles)
+                    command += " " + mod;
+
+
+                // ===== NOW MOVE DECLS INTO MAIN AST =====
+                for (auto& d : usedProgram.decls)
+                {
+                    mergedDecls.push_back(std::move(d));
+                }
+            }
+        }
+
+        // Replace program.decls with merged result
+        program.decls = std::move(mergedDecls);
+
+
+        // =========================
+        // AST DUMP (FULL PROGRAM)
+        // =========================
+
+        std::cout << "\n===== FULL MERGED AST =====\n";
         dumpAST(program);
 
-        // ===== SEMANTIC ANALYSIS =====
+        // =========================
+        // SEMANTIC ANALYSIS
+        // =========================
+
         std::cout << "\n--- Starting Semantic Analysis ---\n";
 
         SemanticAnalyzer analyzer;
@@ -315,8 +466,11 @@ int main(int argc, char** argv)
 
         std::cout << "Semantic analysis complete.\n";
 
+        // =========================
+        // CODEGEN (MAIN FILE)
+        // =========================
 
-        std::cout << "\n--- Starting C Code Generation ---\n";
+        std::cout << "\n--- Starting C Code Generation (MAIN) ---\n";
 
         std::string cCode = CodegenC::generate(program);
 
@@ -326,15 +480,25 @@ int main(int argc, char** argv)
 
         std::cout << "C source written to " << cFileName << "\n";
 
-        std::string command = "gcc " + cFileName + " -o " + exeFileName;
-        std::system(command.c_str());
+        // =========================
+        // BUILD GCC COMMAND
+        // =========================
 
+        std::string command = "gcc " + cFileName;
 
-        std::cout << cFileName << " -> " << exeFileName << "\n";
+        for (const auto& mod : extraCFiles)
+            command += " " + mod;
 
+        command += " -o " + exeFileName;
 
+        std::cout << "Running: " << command << "\n";
 
-        std::cout << "\nCompilation pipeline complete.\n";
+        int result = std::system(command.c_str());
+
+        if (result != 0)
+            throw std::runtime_error("GCC compilation failed.");
+
+        std::cout << "Compilation successful: " << exeFileName << "\n";
     }
     catch (const std::exception& e)
     {
@@ -351,5 +515,6 @@ int main(int argc, char** argv)
     std::cout.rdbuf(coutBuf);
     std::cerr.rdbuf(cerrBuf);
     debugFile.close();
+
     return 0;
 }

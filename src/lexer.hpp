@@ -11,6 +11,8 @@ namespace azin
         // Literals
         IDENTIFIER,
         NUMBER,
+        STRING,
+        CHAR_LITERAL,
 
         // Control keywords
         RETURN,
@@ -18,6 +20,8 @@ namespace azin
         ELSE,
         WHILE,
         FOR,
+        EXTERN,
+
 
         // Types
         TYPE_INT,
@@ -31,10 +35,14 @@ namespace azin
         TYPE_U32,
         TYPE_U64,
         TYPE_BOOL,
+        TYPE_CHAR,
+
+
 
         // idk what to call
         TRUE,
         FALSE,
+        USE_DIRECTIVE,
 
 
 
@@ -45,6 +53,8 @@ namespace azin
         RBRACE,
         SEMICOLON,
         COMMA,
+        LBRACKET,
+        RBRACKET,
 
         // Operators
         EQUAL,
@@ -107,6 +117,8 @@ namespace azin
         // Specialized scanners
         Token identifier();
         Token number();
+        Token string();
+        Token charLiteral();
 
         // Keyword resolver
         TokenType resolveKeyword(const std::string& text);

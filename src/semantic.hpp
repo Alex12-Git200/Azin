@@ -14,8 +14,10 @@ enum class SymbolKind {
 
 struct Symbol {
     SymbolKind kind;
-    std::string type; // return type for function, type for variable
-    std::vector<std::string> paramTypes; // only used if function
+    Type type; // return type for function, type for variable
+    std::vector<Type> paramTypes; // only used if function
+    bool isArray = false;
+    int arraySize = -1;
 };
 
 
@@ -29,6 +31,7 @@ public:
 
 private:
     std::vector<std::unordered_map<std::string, Symbol>> scopes;
+    
 };
 
 class SemanticAnalyzer {
@@ -37,13 +40,14 @@ public:
 
 private:
     SymbolTable symbols;
-    std::string currentFunctionReturnType;
+    Type currentFunctionReturnType;
     bool foundReturnInCurrentFunction = false;
 
     void analyzeFunction(FunctionDecl& fn);
     void analyzeBlock(BlockStmt* block);
     void analyzeStatement(Stmt* stmt);
-    std::string analyzeExpression(Expr* expr);
+    Type analyzeExpression(Expr* expr);
+    bool areTypesCompatible(const Type& from, const Type& to);
 };
 
 }

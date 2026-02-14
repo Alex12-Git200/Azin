@@ -16,6 +16,7 @@ private:
     static std::string generateFunction(const FunctionDecl& fn);
     static std::string generateStatement(const Stmt* stmt);
     static std::string generateExpression(const Expr* expr);
+    std::string generateHeader(const Program& program);
 
     // Indentation helpers
     static std::string indent();
@@ -25,8 +26,8 @@ private:
     // Indentation state
     static int indentLevel;
 
-
-    static std::string mapTypeToC(const std::string& type);
+    
+    static std::string mapTypeToC(const Type& type);
 };
 
 }

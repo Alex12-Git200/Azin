@@ -30,25 +30,71 @@ void CodegenC::decreaseIndent()
     indentLevel--;
 }
 
-
-std::string CodegenC::mapTypeToC(const std::string& type)
+std::string CodegenC::generateHeader(const Program& program)
 {
-    if (type == "int")  return "int";
-    if (type == "nore") return "void";
+    std::stringstream out;
 
-    if (type == "i8")  return "int8_t";
-    if (type == "i16") return "int16_t";
-    if (type == "i32") return "int32_t";
-    if (type == "i64") return "int64_t";
+    out << "#pragma once\n\n";
 
-    if (type == "u8")  return "uint8_t";
-    if (type == "u16") return "uint16_t";
-    if (type == "u32") return "uint32_t";
-    if (type == "u64") return "uint64_t";
-    if (type == "bool") return "bool";
+    for (const auto& decl : program.decls)
+    {
+        if (std::holds_alternative<FunctionDecl>(decl))
+        {
+            const auto& fn = std::get<FunctionDecl>(decl);
 
-    throw std::runtime_error("Unknown type: " + type);
+            if (fn.isExtern)
+                continue;
+
+            out << mapTypeToC(fn.returnType)
+                << " "
+                << fn.name
+                << "(";
+
+            for (size_t i = 0; i < fn.params.size(); i++)
+            {
+                const auto& p = fn.params[i];
+                out << mapTypeToC(p.type);
+
+                if (i + 1 < fn.params.size())
+                    out << ", ";
+            }
+
+            out << ");\n";
+        }
+    }
+
+    return out.str();
 }
+
+std::string CodegenC::mapTypeToC(const Type& type)
+{
+    std::string base;
+
+    if (type.base == "int")      base = "int";
+    else if (type.base == "nore") base = "void";
+    else if (type.base == "bool") base = "bool";
+    else if (type.base == "char") base = "char";
+
+    else if (type.base == "i8")   base = "int8_t";
+    else if (type.base == "i16")  base = "int16_t";
+    else if (type.base == "i32")  base = "int32_t";
+    else if (type.base == "i64")  base = "int64_t";
+
+    else if (type.base == "u8")   base = "uint8_t";
+    else if (type.base == "u16")  base = "uint16_t";
+    else if (type.base == "u32")  base = "uint32_t";
+    else if (type.base == "u64")  base = "uint64_t";
+
+    else
+        throw std::runtime_error("Unknown type: " + type.base);
+
+    if (type.isPointer)
+        base += "*";
+
+    return base;
+}
+
+
 
 
 // Entry Point
@@ -57,10 +103,32 @@ std::string CodegenC::generate(const Program& program)
 {
     std::stringstream out;
 
-    out << "#include <stdint.h>\n\n";
+    out << "#include <stdint.h>\n";
+    out << "#include <stdbool.h>\n";
 
-    for (const auto& fn : program.functions)
-        out << generateFunction(fn);
+
+    for (const auto& decl : program.decls)
+    {
+        if (std::holds_alternative<UseDecl>(decl))
+        {
+            const auto& use = std::get<UseDecl>(decl);
+
+            std::string headerName = use.path;
+            headerName.replace(headerName.find(".az"), 3, ".h");
+
+            out << "#include \"" << headerName << "\"\n";
+        }
+    }
+
+    for (const auto& decl : program.decls)
+    {
+        if (std::holds_alternative<FunctionDecl>(decl))
+        {
+            const auto& fn = std::get<FunctionDecl>(decl);
+            out << generateFunction(fn);
+        }
+    }
+
 
     return out.str();
 }
@@ -71,6 +139,31 @@ std::string CodegenC::generate(const Program& program)
 std::string CodegenC::generateFunction(const FunctionDecl& fn)
 {
     std::stringstream out;
+
+    if (fn.isExtern)
+    {
+        std::stringstream out;
+
+        out << "extern "
+            << mapTypeToC(fn.returnType)
+            << " "
+            << fn.name
+            << "(";
+
+        for (size_t i = 0; i < fn.params.size(); ++i)
+        {
+            const auto& p = fn.params[i];
+            out << mapTypeToC(p.type) << " " << p.name;
+
+            if (i + 1 < fn.params.size())
+                out << ", ";
+        }
+
+        out << ");\n";
+
+        return out.str();
+    }
+
 
     out << mapTypeToC(fn.returnType) << " " << fn.name << "(";
 
@@ -115,6 +208,14 @@ std::string CodegenC::generateStatement(const Stmt* stmt)
 
     if (auto var = dynamic_cast<const VarDeclStmt*>(stmt))
     {
+        if (var->isArray)
+        {
+            return mapTypeToC(var->type) + " " +
+                var->name + "[" +
+                std::to_string(var->arraySize) +
+                "];\n";
+        }
+
         return mapTypeToC(var->type) + " " +
             var->name + " = " +
             generateExpression(var->initializer.get()) +
@@ -123,10 +224,12 @@ std::string CodegenC::generateStatement(const Stmt* stmt)
 
     if (auto assign = dynamic_cast<const AssignmentStmt*>(stmt))
     {
-        return assign->name + " = " +
+        return generateExpression(assign->target.get()) +
+            " = " +
             generateExpression(assign->value.get()) +
             ";\n";
     }
+
 
     if (auto ifstmt = dynamic_cast<const IfStmt*>(stmt))
     {
@@ -161,8 +264,10 @@ std::string CodegenC::generateStatement(const Stmt* stmt)
         out << "\n";
         return out.str();
     }
-
-
+    if (auto exprStmt = dynamic_cast<const ExpressionStmt*>(stmt))
+    {
+        return generateExpression(exprStmt->expression.get()) + ";\n";
+    }
 
 
     throw std::runtime_error("Unsupported statement in C codegen");
@@ -205,6 +310,21 @@ std::string CodegenC::generateExpression(const Expr* expr)
 
         return out.str();
     }
+
+    if (auto str = dynamic_cast<const StringExpr*>(expr))
+    {
+        return "\"" + str->value + "\"";
+    }
+
+    if (auto idx = dynamic_cast<const IndexExpr*>(expr))
+    {
+        return generateExpression(idx->base.get()) +
+            "[" +
+            generateExpression(idx->index.get()) +
+            "]";
+    }
+
+
 
 
     throw std::runtime_error("Unsupported expression in C codegen");

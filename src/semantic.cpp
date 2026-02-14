@@ -35,36 +35,88 @@ Symbol* SymbolTable::lookup(const std::string& name) {
     return nullptr;
 }
 
+bool SemanticAnalyzer::areTypesCompatible(const Type& from, const Type& to)
+{
+    // Exact match
+    if (from == to)
+        return true;
+
+    // Allow int → u64 / i64
+    if (from.base == "int" &&
+        (to.base == "u64" || to.base == "i64"))
+        return true;
+
+    return false;
+}
+
 void SemanticAnalyzer::analyze(Program& program)
 {
     symbols.enterScope();
+    bool foundMain = false;
 
-    // First declare all functions globally
-    for (auto& fn : program.functions)
+    // ===== First pass: declare all functions globally =====
+    for (auto& decl : program.decls)
     {
-        Symbol sym;
-        sym.kind = SymbolKind::Function;
-        sym.type = fn.returnType;
+        if (std::holds_alternative<FunctionDecl>(decl))
+        {
+            auto& fn = std::get<FunctionDecl>(decl);
 
-        for (auto& p : fn.params)
-            sym.paramTypes.push_back(p.type);
+            Symbol sym;
+            sym.kind = SymbolKind::Function;
+            sym.type = fn.returnType;
 
-        if (!symbols.declare(fn.name, sym))
-            throw std::runtime_error("Function redeclared: " + fn.name);
+            for (auto& p : fn.params)
+                sym.paramTypes.push_back(p.type);
+
+            if (!symbols.declare(fn.name, sym))
+                throw std::runtime_error("Function redeclared: " + fn.name);
+        }
     }
 
-    for (auto& fn : program.functions)
-        analyzeFunction(fn);
+    // ===== Second pass: analyze function bodies =====
+    for (auto& decl : program.decls)
+    {
+        if (std::holds_alternative<FunctionDecl>(decl))
+        {
+            auto& fn = std::get<FunctionDecl>(decl);
+            analyzeFunction(fn);
+        }
+    }
+    
+    for (const auto& decl : program.decls)
+    {
+        if (std::holds_alternative<FunctionDecl>(decl))
+        {
+            const auto& fn = std::get<FunctionDecl>(decl);
+            if (fn.name == "main")
+            {
+                if (fn.returnType.base != "int")
+                    throw std::runtime_error("main must return int");
+
+                foundMain = true;
+            }
+        }
+    }
+
+    if (!foundMain)
+        throw std::runtime_error("No main function found");
 
     symbols.exitScope();
 }
+
 
 void SemanticAnalyzer::analyzeFunction(FunctionDecl& fn)
 {
     currentFunctionReturnType = fn.returnType;
     foundReturnInCurrentFunction = false;
 
+    if (fn.isExtern)
+    {
+        return;
+    }
+
     symbols.enterScope();
+
 
     for (auto& param : fn.params)
     {
@@ -78,7 +130,7 @@ void SemanticAnalyzer::analyzeFunction(FunctionDecl& fn)
 
     analyzeBlock(fn.body.get());
 
-    if (currentFunctionReturnType != "nore" && !foundReturnInCurrentFunction)
+    if (currentFunctionReturnType.base != "nore" && !foundReturnInCurrentFunction)
         throw std::runtime_error("Missing return in function: " + fn.name);
 
     symbols.exitScope();
@@ -99,7 +151,26 @@ void SemanticAnalyzer::analyzeStatement(Stmt* stmt)
 {
     if (auto var = dynamic_cast<VarDeclStmt*>(stmt))
     {
-        std::string initType = analyzeExpression(var->initializer.get());
+        if (var->isArray)
+        {
+            Type charType;
+            charType.base = "char";
+
+            if (var->type != charType)
+                throw std::runtime_error("Only char arrays supported for now");
+
+            Symbol sym;
+            sym.kind = SymbolKind::Variable;
+            sym.type = var->type;
+            sym.isArray = true;
+
+            if (!symbols.declare(var->name, sym))
+                throw std::runtime_error("Variable redeclared: " + var->name);
+
+            return; // STOP HERE
+        }
+
+        Type initType = analyzeExpression(var->initializer.get());
 
         if (initType != var->type)
             throw std::runtime_error("Type mismatch in variable declaration: " + var->name);
@@ -110,21 +181,28 @@ void SemanticAnalyzer::analyzeStatement(Stmt* stmt)
 
         if (!symbols.declare(var->name, sym))
             throw std::runtime_error("Variable redeclared: " + var->name);
+
+
+        if (var->isArray)
+        {
+            Type charType;
+            charType.base = "char";
+
+            if (var->type != charType)
+                throw std::runtime_error("Cannot make an array on variable: " + var->name + " because it isn't char");
+        }
+
     }
     else if (auto assign = dynamic_cast<AssignmentStmt*>(stmt))
     {
-        Symbol* sym = symbols.lookup(assign->name);
-        if (!sym)
-            throw std::runtime_error("Undefined variable: " + assign->name);
-
-        std::string valueType = analyzeExpression(assign->value.get());
-
-        if (valueType != sym->type)
-            throw std::runtime_error("Type mismatch in assignment to: " + assign->name);
+        Type targetType = analyzeExpression(assign->target.get());
+        Type valueType  = analyzeExpression(assign->value.get());
+        if (targetType != valueType)
+            throw std::runtime_error("Type mismatch in assignment");
     }
     else if (auto ret = dynamic_cast<ReturnStmt*>(stmt))
     {
-        if (currentFunctionReturnType == "nore")
+        if (currentFunctionReturnType.base == "nore")
         {
             if (ret->value)
                 throw std::runtime_error("nore function cannot return a value");
@@ -137,20 +215,24 @@ void SemanticAnalyzer::analyzeStatement(Stmt* stmt)
         if (!ret->value)
             throw std::runtime_error("Non-nore function must return a value");
 
-        std::string valueType = analyzeExpression(ret->value.get());
+        Type valueType = analyzeExpression(ret->value.get());
 
         if (valueType != currentFunctionReturnType)
             throw std::runtime_error("Return type mismatch");
 
         foundReturnInCurrentFunction = true;
     }
+    
 
 
     else if (auto ifstmt = dynamic_cast<IfStmt*>(stmt))
     {
-        std::string condType = analyzeExpression(ifstmt->condition.get());
+        Type condType = analyzeExpression(ifstmt->condition.get());
 
-        if (condType != "bool")
+        Type boolType;
+        boolType.base = "bool";
+
+        if (condType != boolType)
             throw std::runtime_error("Condition must be bool");
 
         analyzeBlock(ifstmt->thenBranch.get());
@@ -164,19 +246,38 @@ void SemanticAnalyzer::analyzeStatement(Stmt* stmt)
     }
 }
 
-std::string SemanticAnalyzer::analyzeExpression(Expr* expr)
+Type SemanticAnalyzer::analyzeExpression(Expr* expr)
 {
+    // ===== LITERAL =====
     if (auto lit = dynamic_cast<LiteralExpr*>(expr))
     {
-        if (lit->value == "true" || lit->value == "false")
-            return "bool";
+        Type t;
 
-        return "int"; // for now all numbers are int
+        if (lit->value == "true" || lit->value == "false")
+        {
+            t.base = "bool";
+            return t;
+        }
+
+        // char literal: 'a'
+        if (lit->value.size() >= 3 &&
+            lit->value.front() == '\'' &&
+            lit->value.back() == '\'')
+        {
+            t.base = "char";
+            return t;
+        }
+
+        // default: number → int
+        t.base = "int";
+        return t;
     }
 
+    // ===== VARIABLE =====
     if (auto var = dynamic_cast<VarExpr*>(expr))
     {
         Symbol* sym = symbols.lookup(var->name);
+
         if (!sym)
             throw std::runtime_error("Undefined identifier: " + var->name);
 
@@ -186,6 +287,7 @@ std::string SemanticAnalyzer::analyzeExpression(Expr* expr)
         return sym->type;
     }
 
+    // ===== FUNCTION CALL =====
     if (auto call = dynamic_cast<CallExpr*>(expr))
     {
         Symbol* sym = symbols.lookup(call->callee);
@@ -201,49 +303,81 @@ std::string SemanticAnalyzer::analyzeExpression(Expr* expr)
 
         for (size_t i = 0; i < call->arguments.size(); ++i)
         {
-            std::string argType = analyzeExpression(call->arguments[i].get());
+            Type argType = analyzeExpression(call->arguments[i].get());
 
-            if (argType != sym->paramTypes[i])
+            if (!areTypesCompatible(argType, sym->paramTypes[i]))
                 throw std::runtime_error("Argument type mismatch in call to: " + call->callee);
+
         }
 
         return sym->type;
     }
 
+    // ===== BINARY =====
     if (auto bin = dynamic_cast<BinaryExpr*>(expr))
     {
-        std::string leftType = analyzeExpression(bin->left.get());
-        std::string rightType = analyzeExpression(bin->right.get());
+        Type leftType  = analyzeExpression(bin->left.get());
+        Type rightType = analyzeExpression(bin->right.get());
 
         if (leftType != rightType)
             throw std::runtime_error("Type mismatch in binary expression");
 
-        // Comparison operators
+        // Comparison operators → bool
         if (bin->op == "==" || bin->op == "!=" ||
             bin->op == "<"  || bin->op == ">"  ||
             bin->op == "<=" || bin->op == ">=")
         {
-            return "bool";
+            Type t;
+            t.base = "bool";
+            return t;
         }
 
-        // Arithmetic operators
+        // Arithmetic → int only
         if (bin->op == "+" || bin->op == "-" ||
             bin->op == "*" || bin->op == "/")
         {
-            if (leftType != "int")
+            if (leftType.base != "int")
                 throw std::runtime_error("Arithmetic only supported on int");
 
-            return "int";
+            Type t;
+            t.base = "int";
+            return t;
         }
 
         throw std::runtime_error("Unknown binary operator: " + bin->op);
     }
 
+    // ===== STRING LITERAL =====
+    if (auto str = dynamic_cast<StringExpr*>(expr))
+    {
+        Type t;
+        t.base = "char";
+        t.isPointer = true;  // string = char*
+        return t;
+    }
 
+    // ===== ARRAY INDEX =====
+    if (auto index = dynamic_cast<IndexExpr*>(expr))
+    {
+        Type baseType = analyzeExpression(index->base.get());
 
+        if (!baseType.isPointer)
+            throw std::runtime_error("Indexing non-array variable");
+
+        Type indexType = analyzeExpression(index->index.get());
+
+        if (indexType.base != "int")
+            throw std::runtime_error("Array index must be int");
+
+        Type elementType = baseType;
+        elementType.isPointer = false;  // char* → char
+
+        return elementType;
+    }
 
     throw std::runtime_error("Unknown expression in semantic analysis");
 }
+
 
 
 
